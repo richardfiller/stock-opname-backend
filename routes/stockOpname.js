@@ -1,57 +1,102 @@
-const express = require('express');
-const router = express.Router();
-const pool = require('../database');
-const XLSX = require('xlsx'); // Import library xlsx
+import React, { useState } from 'react';
 
-router.post('/submit', async (req, res) => {
-  const { namaUser, lokasi, kodeBarang, namaBarang, expDate, nomorLot, jumlah, keterangan } = req.body;
+const StockOpnameForm = () => {
+  const [formData, setFormData] = useState({
+    namaUser: '',
+    lokasi: '',
+    kodeBarang: '',
+    namaBarang: '',
+    expDate: '',
+    nomorLot: '',
+    jumlah: '',
+    keterangan: '',
+  });
+  const [submissionStatus, setSubmissionStatus] = useState(null);
 
-  try {
-    const result = await pool.query(
-      'INSERT INTO stock_opname (nama_user, lokasi, kode_barang, nama_barang, exp_date, nomor_lot, jumlah, keterangan) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *',
-      [namaUser, lokasi, kodeBarang, namaBarang, expDate, nomorLot, jumlah, keterangan]
-    );
-    res.status(201).json(result.rows[0]); // Mengirim kembali data yang baru disimpan
-  } catch (error) {
-    console.error('Error saving stock opname data:', error);
-    res.status(500).json({ error: 'Failed to save stock opname data' });
-  }
-});
+  const handleChange = (e) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
 
-router.get('/export', async (req, res) => {
-  try {
-    // 1. Ambil data dari database PostgreSQL
-    const { rows } = await pool.query('SELECT * FROM stock_opname'); // Ganti 'stock_opname' jika nama tabel Anda berbeda
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setSubmissionStatus('loading');
 
-    if (rows.length === 0) {
-      return res.status(200).json({ message: 'No stock opname data to export' });
+    try {
+      const response = await fetch('/.netlify/functions/submit-stock', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('Data berhasil disimpan:', data);
+        setSubmissionStatus('success');
+        // Reset form setelah berhasil
+        setFormData({
+          namaUser: '',
+          lokasi: '',
+          kodeBarang: '',
+          namaBarang: '',
+          expDate: '',
+          nomorLot: '',
+          jumlah: '',
+          keterangan: '',
+        });
+      } else {
+        const errorData = await response.json();
+        console.error('Gagal menyimpan data:', errorData);
+        setSubmissionStatus('error');
+      }
+    } catch (error) {
+      console.error('Ada kesalahan:', error);
+      setSubmissionStatus('error');
     }
+  };
 
-    // 2. Buat data untuk worksheet Excel
-    const wsData = [
-      Object.keys(rows[0]), // Header kolom
-      ...rows.map(row => Object.values(row)), // Data baris
-    ];
+  return (
+    <form onSubmit={handleSubmit}>
+      <div>
+        <label htmlFor="namaUser">Nama User:</label>
+        <input type="text" id="namaUser" name="namaUser" value={formData.namaUser} onChange={handleChange} required />
+      </div>
+      <div>
+        <label htmlFor="lokasi">Lokasi:</label>
+        <input type="text" id="lokasi" name="lokasi" value={formData.lokasi} onChange={handleChange} required />
+      </div>
+      <div>
+        <label htmlFor="kodeBarang">Kode Barang:</label>
+        <input type="text" id="kodeBarang" name="kodeBarang" value={formData.kodeBarang} onChange={handleChange} required />
+      </div>
+      <div>
+        <label htmlFor="namaBarang">Nama Barang:</label>
+        <input type="text" id="namaBarang" name="namaBarang" value={formData.namaBarang} onChange={handleChange} required />
+      </div>
+      <div>
+        <label htmlFor="expDate">EXP. Date:</label>
+        <input type="date" id="expDate" name="expDate" value={formData.expDate} onChange={handleChange} />
+      </div>
+      <div>
+        <label htmlFor="nomorLot">Nomor Lot:</label>
+        <input type="text" id="nomorLot" name="nomorLot" value={formData.nomorLot} onChange={handleChange} />
+      </div>
+      <div>
+        <label htmlFor="jumlah">Jumlah:</label>
+        <input type="number" id="jumlah" name="jumlah" value={formData.jumlah} onChange={handleChange} required />
+      </div>
+      <div>
+        <label htmlFor="keterangan">Keterangan:</label>
+        <textarea id="keterangan" name="keterangan" value={formData.keterangan} onChange={handleChange} />
+      </div>
+      <button type="submit" disabled={submissionStatus === 'loading'}>
+        {submissionStatus === 'loading' ? 'Loading...' : 'Simpan'}
+      </button>
+      {submissionStatus === 'success' && <p style={{ color: 'green' }}>Data berhasil disimpan!</p>}
+      {submissionStatus === 'error' && <p style={{ color: 'red' }}>Gagal menyimpan data.</p>}
+    </form>
+  );
+};
 
-    // 3. Buat workbook dan worksheet
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.aoa_to_sheet(wsData);
-
-    // 4. Tambahkan worksheet ke workbook
-    XLSX.utils.book_append_sheet(wb, ws, 'Stock Opname Data');
-
-    // 5. Buat buffer file Excel
-    const excelBuffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
-
-    // 6. Kirim buffer sebagai respons
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', 'attachment; filename="stock_opname_data.xlsx"');
-    res.send(excelBuffer);
-
-  } catch (error) {
-    console.error('Error exporting data to Excel:', error);
-    res.status(500).json({ error: 'Failed to export data to Excel' });
-  }
-});
-
-module.exports = router;
+export default StockOpnameForm;
