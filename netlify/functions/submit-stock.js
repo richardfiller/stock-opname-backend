@@ -1,40 +1,34 @@
-const { Client } = require('pg'); // Import library PostgreSQL
-const XLSX = require('xlsx');
-
-// Konfigurasi koneksi PostgreSQL (gunakan variabel lingkungan Netlify)
-const pgClient = new Client({
-  connectionString: process.env.DATABASE_URL,
-  ssl: {
-    rejectUnauthorized: false // Penting untuk beberapa database hosting
-  }
-});
+const fs = require('fs').promises;
+const path = require('path');
 
 exports.handler = async (event, context) => {
-  if (event.httpMethod !== 'POST') {
-    return { statusCode: 405, body: JSON.stringify({ error: 'Method Not Allowed' }) };
-  }
+    if (event.httpMethod !== 'POST') {
+        return { statusCode: 405, body: JSON.stringify({ error: 'Method Not Allowed' }) };
+    }
 
-  try {
-    await pgClient.connect(); // Connect ke database
+    try {
+        const data = JSON.parse(event.body);
+        const filePath = path.join(__dirname, '..', 'data', 'stock_data.json');
 
-    const { namaUser, lokasi, kodeBarang, namaBarang, expDate, nomorLot, jumlah, keterangan } = JSON.parse(event.body);
+        // Baca data yang sudah ada
+        let existingData = [];
+        try {
+            const fileContent = await fs.readFile(filePath, 'utf8');
+            existingData = JSON.parse(fileContent);
+        } catch (error) {
+            // Jika file belum ada, biarkan array kosong
+        }
 
-    const result = await pgClient.query(
-      'INSERT INTO stock_opname (nama_user, lokasi, kode_barang, nama_barang, exp_date, nomor_lot, jumlah, keterangan) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *',
-      [namaUser, lokasi, kodeBarang, namaBarang, expDate, nomorLot, jumlah, keterangan]
-    );
+        // Tambahkan data baru
+        existingData.push(data);
 
-    await pgClient.end(); // Disconnect setelah query
+        // Tulis kembali ke file
+        await fs.writeFile(filePath, JSON.stringify(existingData, null, 2), 'utf8');
 
-    return {
-      statusCode: 201,
-      body: JSON.stringify(result.rows[0]),
-    };
-  } catch (error) {
-    console.error('Error saving stock opname data:', error);
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ error: 'Failed to save stock opname data: ' + error.message }),
-    };
-  }
+        return { statusCode: 200, body: JSON.stringify({ message: 'Data stock opname berhasil disimpan!' }) };
+
+    } catch (error) {
+        console.error('Gagal menyimpan data stock opname:', error);
+        return { statusCode: 500, body: JSON.stringify({ error: 'Gagal menyimpan data stock opname.' + error.message }) };
+    }
 };
