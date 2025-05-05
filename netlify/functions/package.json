@@ -1,0 +1,15 @@
+{
+  "name": "netlify-functions",
+  "version": "1.0.0",
+  "description": "Netlify Functions for Stock Opname App",
+  "main": "index.js",
+  "scripts": {
+    "build": "",
+    "serve": ""
+  },
+  "dependencies": {
+    "pg": "^8.11.3",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {}
+}
